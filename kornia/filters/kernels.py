@@ -11,7 +11,7 @@ def normalize_kernel2d(input: torch.Tensor) -> torch.Tensor:
         raise TypeError("input should be at least 2D tensor. Got {}"
                         .format(input.size()))
     norm: torch.Tensor = input.abs().sum(dim=-1).sum(dim=-1)
-    return input / (norm.unsqueeze(-1).unsqueeze(-1))
+    return input / (norm.unsqueeze(-1).unsqueeze(-1).clamp(min=1e-9))
 
 
 def gaussian(window_size, sigma):

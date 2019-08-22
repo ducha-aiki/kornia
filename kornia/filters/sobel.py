@@ -56,8 +56,10 @@ class SpatialGradient(nn.Module):
         # convolve input tensor with sobel kernel
         kernel_flip: torch.Tensor = kernel.flip(-3)
         # Pad with "replicate for spatial dims, but with zeros for channel dim
-        padded_inp: torch.Tensor = F.pad(F.pad(input, [1, 1, 1, 1], 'replicate')[:, :, None], # noqa
-                                         [0, 0, 0, 0, 1, 1], 'constant', 0)
+        pd: int = self.kernel.size(-1) // 2
+        channel_pd = self.order
+        padded_inp: torch.Tensor = F.pad(F.pad(input, [pd, pd, pd, pd], 'replicate')[:, :, None], # noqa
+                                         [0, 0, 0, 0, channel_pd, channel_pd], 'constant', 0)
         return F.conv3d(padded_inp, kernel_flip, padding=0, groups=c)
 
 

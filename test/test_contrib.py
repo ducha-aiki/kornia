@@ -5,7 +5,7 @@ from torch.nn.functional import mse_loss
 from torch.testing import assert_allclose
 
 import kornia
-import kornia.contrib.dsnt as dsnt
+import kornia.geometry.dsnt as dsnt
 import kornia.testing as utils  # test utils
 
 

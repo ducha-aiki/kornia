@@ -26,7 +26,6 @@ from kornia.color import (
     adjust_brightness,
 )
 from kornia.contrib import (
-    spatial_soft_argmax2d,
     extract_tensor_patches,
     max_blur_pool2d,
 )

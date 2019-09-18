@@ -2,13 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from kornia.geometry import dsnt as dsnt
+from kornia.geometry import dsnt
 from kornia.utils import create_meshgrid
 from kornia.geometry import normalize_pixel_coordinates
 from typing import Tuple, Union
 
 
-def _get_window_grid_kernel(h: int, w: int) -> torch.Tensor:
+def _get_window_grid_kernel2d(h: int, w: int) -> torch.Tensor:
     '''Helper function, which generates a kernel to
     with window coordinates, residual to window center
     Args:
@@ -23,7 +23,7 @@ def _get_window_grid_kernel(h: int, w: int) -> torch.Tensor:
     return conv_kernel
 
 
-def _get_center_kernel(h: int, w: int) -> torch.Tensor:
+def _get_center_kernel2d(h: int, w: int) -> torch.Tensor:
     '''Helper function, which generates a kernel to
     return center coordinates, when applied with F.conv2d to 2d coordinates grid
     Args:
@@ -43,10 +43,10 @@ class ConvSoftArgmax2d(nn.Module):
                  kernel_size: Tuple[int, int] = (3, 3),
                  stride: Tuple[int, int] = (1, 1),
                  padding: Tuple[int, int] = (1, 1),
-                 temperature: torch.Tensor = torch.tensor(1.0),
+                 temperature: Union[torch.Tensor, float] = torch.tensor(1.0),
                  normalized_coordinates: bool = True,
                  eps: float = 1e-8,
-                 output_nmsed_value: bool = True) -> None:
+                 output_value: bool = False) -> None:
         super(ConvSoftArgmax2d, self).__init__()
         self.kernel_size = kernel_size
         self.stride = stride
@@ -54,7 +54,7 @@ class ConvSoftArgmax2d(nn.Module):
         self.temperature = temperature
         self.normalized_coordinates = normalized_coordinates
         self.eps = eps
-        self.output_nmsed_value = output_nmsed_value
+        self.output_value = output_value
         return
 
     def forward(self, x: torch.Tensor):  # type: ignore
@@ -65,18 +65,18 @@ class ConvSoftArgmax2d(nn.Module):
                                   self.temperature,
                                   self.normalized_coordinates,
                                   self.eps,
-                                  self.output_nmsed_value)
+                                  self.output_value)
 
 
 def conv_soft_argmax2d(input: torch.Tensor,
                        kernel_size: Tuple[int, int] = (3, 3),
                        stride: Tuple[int, int] = (1, 1),
                        padding: Tuple[int, int] = (1, 1),
-                       temperature: torch.Tensor = torch.tensor(1.0),
+                       temperature: Union[torch.Tensor, float] = torch.tensor(1.0),
                        normalized_coordinates: bool = True,
                        eps: float = 1e-8,
-                       output_value: bool = True) -> Union[torch.Tensor,
-                                                           Tuple[torch.Tensor, torch.Tensor]]:
+                       output_value: bool = False) -> Union[torch.Tensor,
+                                                            Tuple[torch.Tensor, torch.Tensor]]:
     """
     Function that computes the convolutional spatial Soft-Argmax 2D over the windows
     of a given input heatmap. Function has two outputs: argmax coordinates and the softmaxpooled heatmap values
@@ -119,7 +119,6 @@ def conv_soft_argmax2d(input: torch.Tensor,
 
         >>> input = torch.randn(20, 16, 50, 32)
         >>> nms_coords, nms_val = conv_soft_argmax2d(input, (3,3), (2,2), (1,1))
-
     """
     if not torch.is_tensor(input):
         raise TypeError("Input type is not a torch.Tensor. Got {}"
@@ -127,13 +126,18 @@ def conv_soft_argmax2d(input: torch.Tensor,
     if not len(input.shape) == 4:
         raise ValueError("Invalid input shape, we expect BxCxHxW. Got: {}"
                          .format(input.shape))
+    if temperature <= 0:
+        raise ValueError("Temperature should be positive float or tensor. Got: {}"
+                         .format(temperature))
+
     b, c, h, w = input.shape
     input = input.view(b * c, 1, h, w)
 
-    center_kernel = _get_center_kernel(kernel_size[0], kernel_size[1])
-    window_kernel = _get_window_grid_kernel(kernel_size[0], kernel_size[1])
+    center_kernel = _get_center_kernel2d(kernel_size[0], kernel_size[1])
+    window_kernel = _get_window_grid_kernel2d(kernel_size[0], kernel_size[1])
+    window_kernel = window_kernel.to(input.device).to(input.dtype)
 
-    x_exp = (input / torch.clamp(temperature, eps)).exp()
+    x_exp = (input / temperature).exp()
 
     # F.avg_pool2d(.., divisor_override = 1.0) - proper way for sum pool in PyTorch 1.2.
     # Not available yet in version 1.0, so let's do manually
@@ -156,7 +160,7 @@ def conv_soft_argmax2d(input: torch.Tensor,
     grid_global: torch.Tensor = create_meshgrid(h, w, False).permute(0, 3, 1, 2)
     grid_global = grid_global.to(input.device).to(input.dtype)
     grid_global_pooled = F.conv2d(grid_global,
-                                  center_kernel,
+                                  center_kernel.to(input.device).to(input.dtype),
                                   stride=stride,
                                   padding=padding)
 
@@ -175,6 +179,134 @@ def conv_soft_argmax2d(input: torch.Tensor,
     if normalized_coordinates:
         coords_max = normalize_pixel_coordinates(coords_max.permute(0, 2, 3, 1), h, w)
         coords_max = coords_max.permute(0, 3, 1, 2)
+
+    # Back B*C -> (b, c)
+    coords_max = coords_max.view(b, c, 2, coords_max.size(2), coords_max.size(3))
+
+    if output_value:
+        return coords_max, x_softmaxpool
+    return coords_max
+
+
+def conv_soft_argmax3d(input: torch.Tensor,
+                       kernel_size: Tuple[int, int, int] = (3, 3, 3),
+                       stride: Tuple[int, int, int] = (1, 1, 1),
+                       padding: Tuple[int, int, int] = (1, 1, 1),
+                       temperature: Union[torch.Tensor, float] = torch.tensor(1.0),
+                       normalized_coordinates: bool = True,
+                       eps: float = 1e-8,
+                       output_value: bool = False) -> Union[torch.Tensor,
+                                                            Tuple[torch.Tensor, torch.Tensor]]:
+    """
+    Function that computes the convolutional spatial Soft-Argmax 3D over the windows
+    of a given input heatmap. Function has two outputs: argmax coordinates and the softmaxpooled heatmap values
+    themselves.
+
+    On each window, the function computed is:
+
+    .. math::
+        ijk(X) = \frac{\sum_{(i,j,k) * exp(x / T)  \in X}} {\sum_{exp(x / T)  \in X}}
+        val(X) = \frac{\sum_{x * exp(x / T)  \in X}} {\sum_{exp(x / T)  \in X}}
+
+    - where T is temperature.
+
+    Args:
+        kernel_size (Tuple([int,int,int])): the size of the window
+        stride  (Tuple([int,int,int])): the stride of the window.
+        padding (Tuple([int,int,int])): input zero padding
+        temperature (torch.Tensor): factor to apply to input. Default is 1.
+        normalized_coordinates (bool): whether to return the
+          coordinates normalized in the range of [-1, 1]. Otherwise,
+          it will return the coordinates in the range of the input shape.
+          Default is True.
+        eps (float): small value to avoid zero division. Default is 1e-8.
+        output_value(bool): if True, val is outputed, if False, only ij
+
+
+    Shape:
+        - Input: :math:`(N, C, D_{in}, H_{in}, W_{in})`
+        - Output: math:`(N, C, 3, D_{out}, H_{out}, W_{out})`, :math:`(N, C, D_{out}, H_{out}, W_{out})`, where
+
+          .. math::
+              H_{out} = \left\lfloor\frac{D_{in}  + 2 \times \text{padding}[0] -
+              (\text{kernel\_size}[0] - 1) - 1}{\text{stride}[0]} + 1\right\rfloor
+
+          .. math::
+              H_{out} = \left\lfloor\frac{H_{in}  + 2 \times \text{padding}[1] -
+              (\text{kernel\_size}[1] - 1) - 1}{\text{stride}[1]} + 1\right\rfloor
+
+          .. math::
+              W_{out} = \left\lfloor\frac{W_{in}  + 2 \times \text{padding}[2] -
+              (\text{kernel\_size}[2] - 1) - 1}{\text{stride}[2]} + 1\right\rfloor
+
+    Examples::
+
+        >>> input = torch.randn(20, 16, 3, 50, 32)
+        >>> nms_coords, nms_val = conv_soft_argmax2d(input, (3, 3, 3), (1, 2, 2), (0, 1, 1))
+    """
+    if not torch.is_tensor(input):
+        raise TypeError("Input type is not a torch.Tensor. Got {}"
+                        .format(type(input)))
+    if not len(input.shape) == 5:
+        raise ValueError("Invalid input shape, we expect BxCxDxHxW. Got: {}"
+                         .format(input.shape))
+    if temperature <= 0:
+        raise ValueError("Temperature should be positive float or tensor. Got: {}"
+                         .format(temperature))
+
+    b, c, d, h, w = input.shape
+    input = input.view(b * c, 1, d, h, w)
+
+    center_kernel = _get_center_kernel2d(kernel_size[0], kernel_size[1])
+    window_kernel = _get_window_grid_kernel2d(kernel_size[0], kernel_size[1])
+    window_kernel = window_kernel.to(input.device).to(input.dtype)
+
+    x_exp = (input / temperature).exp()
+
+    # F.avg_pool2d(.., divisor_override = 1.0) - proper way for sum pool in PyTorch 1.2.
+    # Not available yet in version 1.0, so let's do manually
+    pool_coef: float = float(kernel_size[0] * kernel_size[1])
+
+    # softmax denominator
+    den = pool_coef * F.avg_pool2d(x_exp,
+                                   kernel_size,
+                                   stride=stride,
+                                   padding=padding) + 1e-12
+
+    x_softmaxpool = pool_coef * F.avg_pool2d(x_exp * input,
+                                             kernel_size,
+                                             stride=stride,
+                                             padding=padding) / den
+    x_softmaxpool = x_softmaxpool.view(b, c, x_softmaxpool.size(2), x_softmaxpool.size(3))
+
+    # We need to output also coordinates
+    # Pooled window center coordinates
+    grid_global: torch.Tensor = create_meshgrid(h, w, False).permute(0, 3, 1, 2)
+    grid_global = grid_global.to(input.device).to(input.dtype)
+    grid_global_pooled = F.conv2d(grid_global,
+                                  center_kernel.to(input.device).to(input.dtype),
+                                  stride=stride,
+                                  padding=padding)
+
+    # Coordinates of maxima residual to window center
+    # prepare kernel
+    coords_max: torch.Tensor = F.conv2d(x_exp,
+                                        window_kernel,
+                                        stride=stride,
+                                        padding=padding)
+
+    coords_max = coords_max / den.expand_as(coords_max)
+    coords_max = coords_max + grid_global_pooled.expand_as(coords_max)
+    # [:,:, 0, ...] is x
+    # [:,:, 1, ...] is y
+
+    if normalized_coordinates:
+        coords_max = normalize_pixel_coordinates(coords_max.permute(0, 2, 3, 1), h, w)
+        coords_max = coords_max.permute(0, 3, 1, 2)
+
+    # Back B*C -> (b, c)
+    coords_max = coords_max.view(b, c, 2, coords_max.size(2), coords_max.size(3))
+
     if output_value:
         return coords_max, x_softmaxpool
     return coords_max

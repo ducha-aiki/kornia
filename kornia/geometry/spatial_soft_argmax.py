@@ -75,8 +75,8 @@ def conv_soft_argmax2d(input: torch.Tensor,
                        temperature: torch.Tensor = torch.tensor(1.0),
                        normalized_coordinates: bool = True,
                        eps: float = 1e-8,
-                       output_nmsed_value: bool = True) -> Union[torch.Tensor,
-                                                                 Tuple[torch.Tensor, torch.Tensor]]:
+                       output_value: bool = True) -> Union[torch.Tensor,
+                                                           Tuple[torch.Tensor, torch.Tensor]]:
     """
     Function that computes the convolutional spatial Soft-Argmax 2D over the windows
     of a given input heatmap. Function has two outputs: argmax coordinates and the softmaxpooled heatmap values
@@ -100,7 +100,7 @@ def conv_soft_argmax2d(input: torch.Tensor,
           it will return the coordinates in the range of the input shape.
           Default is True.
         eps (float): small value to avoid zero division. Default is 1e-8.
-        output_nmsed_value(bool): if True, val is outputed, if False, only ij
+        output_value(bool): if True, val is outputed, if False, only ij
 
 
     Shape:
@@ -145,10 +145,11 @@ def conv_soft_argmax2d(input: torch.Tensor,
                                    stride=stride,
                                    padding=padding) + 1e-12
 
-    resp_maxima = pool_coef * F.avg_pool2d(x_exp * input,
-                                           kernel_size,
-                                           stride=stride,
-                                           padding=padding) / den
+    x_softmaxpool = pool_coef * F.avg_pool2d(x_exp * input,
+                                             kernel_size,
+                                             stride=stride,
+                                             padding=padding) / den
+    x_softmaxpool = x_softmaxpool.view(b, c, x_softmaxpool.size(2), x_softmaxpool.size(3))
 
     # We need to output also coordinates
     # Pooled window center coordinates
@@ -174,8 +175,8 @@ def conv_soft_argmax2d(input: torch.Tensor,
     if normalized_coordinates:
         coords_max = normalize_pixel_coordinates(coords_max.permute(0, 2, 3, 1), h, w)
         coords_max = coords_max.permute(0, 3, 1, 2)
-    if output_nmsed_value:
-        return coords_max, resp_maxima
+    if output_value:
+        return coords_max, x_softmaxpool
     return coords_max
 
 

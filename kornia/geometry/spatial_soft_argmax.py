@@ -102,6 +102,36 @@ class ConvSoftArgmax2d(nn.Module):
                                   self.output_value)
 
 
+class ConvSoftArgmax3d(nn.Module):
+    def __init__(self,
+                 kernel_size: Tuple[int, int, int] = (3, 3, 3),
+                 stride: Tuple[int, int, int] = (1, 1, 1),
+                 padding: Tuple[int, int, int] = (1, 1, 1),
+                 temperature: Union[torch.Tensor, float] = torch.tensor(1.0),
+                 normalized_coordinates: bool = True,
+                 eps: float = 1e-8,
+                 output_value: bool = False) -> None:
+        super(ConvSoftArgmax3d, self).__init__()
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.temperature = temperature
+        self.normalized_coordinates = normalized_coordinates
+        self.eps = eps
+        self.output_value = output_value
+        return
+
+    def forward(self, x: torch.Tensor):  # type: ignore
+        return conv_soft_argmax3d(x,
+                                  self.kernel_size,
+                                  self.stride,
+                                  self.padding,
+                                  self.temperature,
+                                  self.normalized_coordinates,
+                                  self.eps,
+                                  self.output_value)
+
+
 def conv_soft_argmax2d(input: torch.Tensor,
                        kernel_size: Tuple[int, int] = (3, 3),
                        stride: Tuple[int, int] = (1, 1),

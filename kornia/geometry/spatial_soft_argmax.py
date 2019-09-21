@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from kornia.geometry import dsnt
-from kornia.utils import create_meshgrid
-from kornia.geometry import normalize_pixel_coordinates
+from kornia.utils import create_meshgrid, create_meshgrid3d
+from kornia.geometry import normalize_pixel_coordinates, normalize_pixel_coordinates3d
 from typing import Tuple, Union
 
 
@@ -36,6 +36,40 @@ def _get_center_kernel2d(h: int, w: int) -> torch.Tensor:
     center_kernel[0, 0, h // 2, w // 2] = 1.0
     center_kernel[1, 1, h // 2, w // 2] = 1.0
     return center_kernel
+
+
+def _get_center_kernel3d(d: int, h: int, w: int) -> torch.Tensor:
+    '''Helper function, which generates a kernel to
+    return center coordinates, when applied with F.conv2d to 3d coordinates grid
+    Args:
+         d (int): kernel depth
+         h (int): kernel height
+         w (int): kernel width
+    Returns:
+        conv_kernel (torch.Tensor) [3x3xdxhxw]
+    '''
+    center_kernel = torch.zeros(3, 3, d, h, w)
+    center_kernel[0, 0, d // 2, h // 2, w // 2] = 1.0
+    center_kernel[1, 1, d // 2, h // 2, w // 2] = 1.0
+    center_kernel[2, 2, d // 2, h // 2, w // 2] = 1.0
+    return center_kernel
+
+
+def _get_window_grid_kernel3d(d: int, h: int, w: int) -> torch.Tensor:
+    '''Helper function, which generates a kernel to return coordinates,
+    residual to window center
+    Args:
+         d (int): kernel depth
+         h (int): kernel height
+         w (int): kernel width
+    Returns:
+        conv_kernel (torch.Tensor) [3x1xdxhxw]
+    '''
+    grid2d = create_meshgrid(h, w, True)
+    z = torch.linspace(-1, 1, d).view(d, 1, 1, 1)
+    grid3d = torch.cat([z.repeat(1, h, w, 1).contiguous(), grid2d.repeat(d, 1, 1, 1)], dim=3)
+    conv_kernel = grid3d.permute(3, 0, 1, 2).unsqueeze(1)
+    return conv_kernel
 
 
 class ConvSoftArgmax2d(nn.Module):
@@ -257,40 +291,42 @@ def conv_soft_argmax3d(input: torch.Tensor,
     b, c, d, h, w = input.shape
     input = input.view(b * c, 1, d, h, w)
 
-    center_kernel = _get_center_kernel2d(kernel_size[0], kernel_size[1])
-    window_kernel = _get_window_grid_kernel2d(kernel_size[0], kernel_size[1])
+    center_kernel = _get_center_kernel3d(kernel_size[0], kernel_size[1], kernel_size[2])
+    window_kernel = _get_window_grid_kernel3d(kernel_size[0], kernel_size[1], kernel_size[2])
     window_kernel = window_kernel.to(input.device).to(input.dtype)
 
     x_exp = (input / temperature).exp()
 
-    # F.avg_pool2d(.., divisor_override = 1.0) - proper way for sum pool in PyTorch 1.2.
-    # Not available yet in version 1.0, so let's do manually
-    pool_coef: float = float(kernel_size[0] * kernel_size[1])
+    pool_coef: float = float(kernel_size[0] * kernel_size[1] * kernel_size[2])
 
     # softmax denominator
-    den = pool_coef * F.avg_pool2d(x_exp,
+    den = pool_coef * F.avg_pool3d(x_exp.view(input.size()),
                                    kernel_size,
                                    stride=stride,
                                    padding=padding) + 1e-12
 
-    x_softmaxpool = pool_coef * F.avg_pool2d(x_exp * input,
+    x_softmaxpool = pool_coef * F.avg_pool3d(x_exp.view(input.size()) * input,
                                              kernel_size,
                                              stride=stride,
                                              padding=padding) / den
-    x_softmaxpool = x_softmaxpool.view(b, c, x_softmaxpool.size(2), x_softmaxpool.size(3))
+    x_softmaxpool = x_softmaxpool.view(b,
+                                       c,
+                                       x_softmaxpool.size(2),
+                                       x_softmaxpool.size(3),
+                                       x_softmaxpool.size(4))
 
     # We need to output also coordinates
     # Pooled window center coordinates
-    grid_global: torch.Tensor = create_meshgrid(h, w, False).permute(0, 3, 1, 2)
+    grid_global: torch.Tensor = create_meshgrid3d(d, h, w, False).permute(0, 4, 1, 2, 3)
     grid_global = grid_global.to(input.device).to(input.dtype)
-    grid_global_pooled = F.conv2d(grid_global,
+    grid_global_pooled = F.conv3d(grid_global,
                                   center_kernel.to(input.device).to(input.dtype),
                                   stride=stride,
                                   padding=padding)
 
     # Coordinates of maxima residual to window center
     # prepare kernel
-    coords_max: torch.Tensor = F.conv2d(x_exp,
+    coords_max: torch.Tensor = F.conv3d(x_exp,
                                         window_kernel,
                                         stride=stride,
                                         padding=padding)
@@ -301,11 +337,11 @@ def conv_soft_argmax3d(input: torch.Tensor,
     # [:,:, 1, ...] is y
 
     if normalized_coordinates:
-        coords_max = normalize_pixel_coordinates(coords_max.permute(0, 2, 3, 1), h, w)
-        coords_max = coords_max.permute(0, 3, 1, 2)
+        coords_max = normalize_pixel_coordinates3d(coords_max.permute(0, 2, 3, 4, 1), d, h, w)
+        coords_max = coords_max.permute(0, 4, 1, 2, 3)
 
     # Back B*C -> (b, c)
-    coords_max = coords_max.view(b, c, 2, coords_max.size(2), coords_max.size(3))
+    coords_max = coords_max.view(b, c, 3, coords_max.size(2), coords_max.size(3), coords_max.size(4))
 
     if output_value:
         return coords_max, x_softmaxpool

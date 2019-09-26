@@ -8,7 +8,7 @@ from kornia.filters import get_gaussian_kernel2d
 from kornia.filters import SpatialGradient
 from kornia.geometry import pi, angle_to_rotation_matrix
 from kornia.feature import (extract_patches_from_pyramid, make_upright,
-                            normalize_laf)
+                            normalize_laf, raise_error_if_laf_is_not_valid)
 from kornia.geometry import rad2deg
 
 
@@ -55,7 +55,7 @@ class PatchDominantGradientOrientation(nn.Module):
                 "input shape should be must be [Bx1x{}x{}]. "
                 "Got {}".format(self.patch_size, self.patch_size, patch.size()))
         self.weighting = self.weighting.to(patch.dtype).to(patch.device)
-
+        self.angular_smooth = self.angular_smooth.to(patch.dtype).to(patch.device)
         grads: torch.Tensor = self.gradient(patch)
         # unpack the edges
         gx: torch.Tensor = grads[:, :, 0]
@@ -93,14 +93,7 @@ class LAFOrienter(nn.Module):
         return
 
     def forward(self, laf: torch.Tensor, img: torch.Tensor) -> torch.Tensor:  # type: ignore
-        laf_message: str = "Invalid laf shape, we expect BxNx2x3. Got: {}".format(laf.shape)
-        if not torch.is_tensor(laf):
-            raise TypeError("Laf type is not a torch.Tensor. Got {}"
-                            .format(type(laf)))
-        if len(laf.shape) != 4:
-            raise ValueError(laf_message)
-        if laf.size(2) != 2 or laf.size(3) != 3:
-            raise ValueError(laf_message)
+        raise_error_if_laf_is_not_valid(laf)
         img_message: str = "Invalid img shape, we expect BxCxHxW. Got: {}".format(img.shape)
         if not torch.is_tensor(img):
             raise TypeError("img type is not a torch.Tensor. Got {}"
@@ -112,7 +105,7 @@ class LAFOrienter(nn.Module):
                              .format(img.size(0), laf.size(0)))
         B, N = laf.shape[:2]
         patches: torch.Tensor = extract_patches_from_pyramid(img,
-                                                             normalize_laf(laf, img),
+                                                             laf,
                                                              self.patch_size).view(-1,
                                                                                    1,
                                                                                    self.patch_size,

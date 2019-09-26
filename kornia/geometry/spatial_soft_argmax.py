@@ -66,7 +66,10 @@ def _get_window_grid_kernel3d(d: int, h: int, w: int) -> torch.Tensor:
         conv_kernel (torch.Tensor) [3x1xdxhxw]
     '''
     grid2d = create_meshgrid(h, w, True)
-    z = torch.linspace(-1, 1, d).view(d, 1, 1, 1)
+    if d > 1:
+        z = torch.linspace(-1, 1, d).view(d, 1, 1, 1)
+    else:  # only onr channel with index == 0
+        z = torch.zeros(1, 1, 1, 1)
     grid3d = torch.cat([z.repeat(1, h, w, 1).contiguous(), grid2d.repeat(d, 1, 1, 1)], dim=3)
     conv_kernel = grid3d.permute(3, 0, 1, 2).unsqueeze(1)
     return conv_kernel
@@ -454,6 +457,12 @@ class SpatialSoftArgmax2d(nn.Module):
         self.temperature: torch.Tensor = temperature
         self.normalized_coordinates: bool = normalized_coordinates
         self.eps: float = eps
+
+    def __repr__(self) -> str:
+        return self.__class__.__name__ +\
+            '(temperature=' + str(self.temperature) + ', ' +\
+            'normalized_coordinates=' + str(self.normalized_coordinates) + ', ' + \
+            'eps=' + str(self.eps) + ')'
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:  # type: ignore
         return spatial_soft_argmax2d(input, self.temperature,

@@ -96,6 +96,13 @@ class TestMakeUpright:
         laf = kornia.feature.make_upright(inp)
         assert_allclose(laf, expected)
 
+    def test_do_nothing_with_scalea(self):
+        inp = torch.tensor([[2, 0, 0], [0, 2, 0]]).float()
+        inp = inp.view(1, 1, 2, 3)
+        expected = torch.tensor([[2, 0, 0], [0, 2, 0]]).float()
+        laf = kornia.feature.make_upright(inp)
+        assert_allclose(laf, expected)
+
     def test_check_zeros(self):
         inp = torch.rand(4, 5, 2, 3)
         laf = kornia.feature.make_upright(inp)
@@ -259,7 +266,7 @@ class TestExtractPatchesSimple:
         img = utils.tensor_to_gradcheck_var(img)  # to var
         nlaf = utils.tensor_to_gradcheck_var(nlaf)  # to var
         assert gradcheck(kornia.feature.extract_patches_simple,
-                         (img, nlaf, PS,),
+                         (img, nlaf, PS, False),
                          raise_exception=True)
 
 
@@ -281,5 +288,5 @@ class TestExtractPatchesPyr:
         img = utils.tensor_to_gradcheck_var(img)  # to var
         nlaf = utils.tensor_to_gradcheck_var(nlaf)  # to var
         assert gradcheck(kornia.feature.extract_patches_from_pyramid,
-                         (img, nlaf, PS,),
+                         (img, nlaf, PS, False),
                          raise_exception=True)

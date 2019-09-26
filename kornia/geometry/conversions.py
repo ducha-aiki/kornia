@@ -622,7 +622,7 @@ def normalize_pixel_coordinates(
         torch.tensor(width), torch.tensor(height)
     ]).to(pixel_coordinates.device).to(pixel_coordinates.dtype)
 
-    factor: torch.Tensor = torch.tensor(2.) / (hw - 1)
+    factor: torch.Tensor = torch.tensor(2.) / (hw - 1).clamp(1e-8)
 
     return factor * pixel_coordinates - 1
 
@@ -653,7 +653,7 @@ def denormalize_pixel_coordinates(
         torch.tensor(width), torch.tensor(height)
     ]).to(pixel_coordinates.device).to(pixel_coordinates.dtype)
 
-    factor: torch.Tensor = torch.tensor(2.) / (hw - 1)
+    factor: torch.Tensor = torch.tensor(2.) / (hw - 1).clamp(1e-8)
 
     return torch.tensor(1.) / factor * (pixel_coordinates + 1)
 
@@ -685,7 +685,7 @@ def normalize_pixel_coordinates3d(
         torch.tensor(depth), torch.tensor(width), torch.tensor(height)
     ]).to(pixel_coordinates.device).to(pixel_coordinates.dtype)
 
-    factor: torch.Tensor = torch.tensor(2.) / (dhw - 1)
+    factor: torch.Tensor = torch.tensor(2.) / (dhw - 1).clamp(1e-8)
 
     return factor * pixel_coordinates - 1
 
@@ -718,6 +718,6 @@ def denormalize_pixel_coordinates3d(
         torch.tensor(depth), torch.tensor(width), torch.tensor(height)
     ]).to(pixel_coordinates.device).to(pixel_coordinates.dtype)
 
-    factor: torch.Tensor = torch.tensor(2.) / (dhw - 1)
+    factor: torch.Tensor = torch.tensor(2.) / (dhw - 1).clamp(1e-8)
 
     return torch.tensor(1.) / factor * (pixel_coordinates + 1)

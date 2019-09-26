@@ -307,63 +307,73 @@ def generate_patch_grid_from_normalized_LAF(img: torch.Tensor,
 
 
 def extract_patches_simple(img: torch.Tensor,
-                           LAF: torch.Tensor,
-                           PS: int = 32) -> torch.Tensor:
+                           laf: torch.Tensor,
+                           PS: int = 32,
+                           normalize_lafs_before_extraction: bool = True) -> torch.Tensor:
     """
     Extract patches defined by LAFs from image tensor.
     No smoothing applied, huge aliasing (better use extract_patches_from_pyramid)
     Args:
         img: (torch.Tensor) images, LAFs are detected in
-        LAF: (torch.Tensor).
+        laf: (torch.Tensor).
         PS: (int) patch size, default = 32
-
+        normalize_lafs_before_extraction (bool) - if True, lafs are normalized to image size, default = True
     Returns:
         patches: (torch.Tensor),  :math:`(B, N, CH, PS,PS)`
     """
-    raise_error_if_laf_is_not_valid(LAF)
+    raise_error_if_laf_is_not_valid(laf)
+    if normalize_lafs_before_extraction:
+        nlaf: torch.Tensor = normalize_laf(laf, img)
+    else:
+        nlaf = laf
     num, ch, h, w = img.size()
-    B, N, _, _ = LAF.size()
+    B, N, _, _ = laf.size()
     out = []
     # for loop temporarily, to be refactored
     for i in range(B):
-        grid = generate_patch_grid_from_normalized_LAF(img[i:i + 1], LAF[i:i + 1], PS)
+        grid = generate_patch_grid_from_normalized_LAF(img[i:i + 1], nlaf[i:i + 1], PS)
         out.append(F.grid_sample(img[i:i + 1].expand(grid.size(0), ch, h, w), grid, padding_mode="border"))
     return torch.cat(out, dim=0).view(B, N, ch, PS, PS)
 
 
 def extract_patches_from_pyramid(img: torch.Tensor,
-                                 LAF: torch.Tensor,
-                                 PS: int = 32) -> torch.Tensor:
+                                 laf: torch.Tensor,
+                                 PS: int = 32,
+                                 normalize_lafs_before_extraction: bool = True) -> torch.Tensor:
     """
     Extract patches defined by LAFs from image tensor.
     Patches are extracted from appropriate pyramid level
     Args:
-        LAF: (torch.Tensor).
+        laf: (torch.Tensor).
         images: (torch.Tensor) images, LAFs are detected in
         PS: (int) patch size, default = 32
-
+        normalize_lafs_before_extraction (bool) - if True, lafs are normalized to image size, default = True
     Returns:
         patches: (torch.Tensor),  :math:`(B, N, CH, PS,PS)`
     """
-    raise_error_if_laf_is_not_valid(LAF)
-    B, N, _, _ = LAF.size()
+    raise_error_if_laf_is_not_valid(laf)
+    if normalize_lafs_before_extraction:
+        nlaf: torch.Tensor = normalize_laf(laf, img)
+    else:
+        nlaf = laf
+    B, N, _, _ = laf.size()
     num, ch, h, w = img.size()
-    scale = 2.0 * get_laf_scale(denormalize_laf(LAF, img)) / float(PS)
+    scale = 2.0 * get_laf_scale(denormalize_laf(nlaf, img)) / float(PS)
     pyr_idx = (scale.log2() + 0.5).relu().long()
     cur_img = img
     cur_pyr_level = int(0)
-    out = torch.zeros(B, N, ch, PS, PS).to(LAF.dtype)
-    while min(cur_img.size(2), cur_img.size(3)) > PS:
+    out = torch.zeros(B, N, ch, PS, PS).to(nlaf.dtype)
+    while min(cur_img.size(2), cur_img.size(3)) >= PS:
         num, ch, h, w = cur_img.size()
         # for loop temporarily, to be refactored
         for i in range(B):
-            scale_mask = (pyr_idx[i] == cur_pyr_level).squeeze()
+            scale_mask = (pyr_idx[i] == cur_pyr_level).bool().squeeze()
             if (scale_mask.float().sum()) == 0:
                 continue
-            scale_mask = scale_mask.byte().view(-1)
+            scale_mask = scale_mask.bool().view(-1)
             grid = generate_patch_grid_from_normalized_LAF(
                 cur_img[i:i + 1],
-                LAF[i:i + 1, scale_mask, :, :],
+                nlaf[i:i + 1, scale_mask, :, :],
                 PS)
             out[i, scale_mask, ..., :] = out[i, scale_mask, ..., :].clone() * 0\
                 + F.grid_sample(cur_img[i:i + 1].expand(grid.size(0), ch, h, w), grid, padding_mode="border")

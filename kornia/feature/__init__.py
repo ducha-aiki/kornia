@@ -14,7 +14,8 @@ from .laf import (extract_patches_from_pyramid,
                   ellipse_to_laf,
                   make_upright,
                   scale_laf,
-                  get_laf_scale)
+                  get_laf_scale,
+                  raise_error_if_laf_is_not_valid)
 from .siftdesc import SIFTDescriptor
 from .scale_space_detector import ScaleSpaceDetector, PassLAF
 from .affine_shape import LAFAffineShapeEstimator, PatchAffineShapeEstimator
@@ -45,5 +46,6 @@ __all__ = [
     "LAFAffineShapeEstimator",
     "PatchAffineShapeEstimator",
     "LAFOrienter",
-    "PatchDominantGradientOrientation"
+    "PatchDominantGradientOrientation",
+    "raise_error_if_laf_is_not_valid"
 ]

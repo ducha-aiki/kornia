@@ -310,3 +310,123 @@ class TestConvSoftArgmax2d:
         coords, val = softargmax(input)
         assert_allclose(val, expected_val)
         assert_allclose(coords, expected_coord)
+
+
+class TestConvSoftArgmax3d:
+    def test_smoke(self):
+        input = torch.zeros(1, 1, 3, 3, 3)
+        m = kornia.ConvSoftArgmax3d((3, 3, 3), output_value=False)
+        assert m(input).shape == (1, 1, 3, 3, 3, 3)
+
+    def test_smoke_with_val(self):
+        input = torch.zeros(1, 1, 3, 3, 3)
+        m = kornia.ConvSoftArgmax3d((3, 3, 3), output_value=True)
+        coords, val = m(input)
+        assert coords.shape == (1, 1, 3, 3, 3, 3)
+        assert val.shape == (1, 1, 3, 3, 3)
+
+    def test_gradcheck(self):
+        input = torch.rand(1, 2, 3, 5, 5)
+        input = utils.tensor_to_gradcheck_var(input)  # to var
+        assert gradcheck(kornia.conv_soft_argmax3d,
+                         (input), raise_exception=True)
+
+    def test_cold_diag(self):
+        input = torch.tensor([[[[
+            [0., 0., 0., 0., 0.],
+            [0., 1., 0., 0., 0.],
+            [0., 0., 0., 0., 0.],
+            [0., 0., 0., 1., 0.],
+            [0., 0., 0., 0., 0.],
+        ]]]])
+        softargmax = kornia.ConvSoftArgmax3d((1, 3, 3), (1, 2, 2), (0, 0, 0),
+                                             temperature=0.05,
+                                             normalized_coordinates=False,
+                                             output_value=True)
+        expected_val = torch.tensor([[[[[1., 0.],
+                                       [0., 1.]]]]])
+        expected_coord = torch.tensor([[[
+                                        [[[0., 0.],
+                                          [0., 0.]]],
+                                        [[[1., 3.],
+                                          [1., 3.]]],
+                                        [[[1., 1.],
+                                          [3., 3.]]]]]])
+        coords, val = softargmax(input)
+        assert_allclose(val, expected_val)
+        assert_allclose(coords, expected_coord)
+
+    def test_hot_diag(self):
+        input = torch.tensor([[[[
+            [0., 0., 0., 0., 0.],
+            [0., 1., 0., 0., 0.],
+            [0., 0., 0., 0., 0.],
+            [0., 0., 0., 1., 0.],
+            [0., 0., 0., 0., 0.],
+        ]]]])
+        softargmax = kornia.ConvSoftArgmax3d((1, 3, 3), (1, 2, 2), (0, 0, 0),
+                                             temperature=10.,
+                                             normalized_coordinates=False,
+                                             output_value=True)
+        expected_val = torch.tensor([[[[[0.1214, 0.],
+                                       [0., 0.1214]]]]])
+        expected_coord = torch.tensor([[[
+                                        [[[0., 0.],
+                                          [0., 0.]]],
+                                        [[[1., 3.],
+                                          [1., 3.]]],
+                                        [[[1., 1.],
+                                          [3., 3.]]]]]])
+        coords, val = softargmax(input)
+        assert_allclose(val, expected_val)
+        assert_allclose(coords, expected_coord)
+
+    def test_cold_diag_norm(self):
+        input = torch.tensor([[[[
+            [0., 0., 0., 0., 0.],
+            [0., 1., 0., 0., 0.],
+            [0., 0., 0., 0., 0.],
+            [0., 0., 0., 1., 0.],
+            [0., 0., 0., 0., 0.],
+        ]]]])
+        softargmax = kornia.ConvSoftArgmax3d((1, 3, 3), (1, 2, 2), (0, 0, 0),
+                                             temperature=0.05,
+                                             normalized_coordinates=True,
+                                             output_value=True)
+        expected_val = torch.tensor([[[[[1., 0.],
+                                       [0., 1.]]]]])
+        expected_coord = torch.tensor([[[
+            [[[-1., -1.],
+              [-1., -1.]]],
+            [[[-0.5, 0.5],
+              [-0.5, 0.5]]],
+            [[[-0.5, -0.5],
+              [0.5, 0.5]]]]]])
+        coords, val = softargmax(input)
+        assert_allclose(val, expected_val)
+        assert_allclose(coords, expected_coord)
+
+    def test_hot_diag_norm(self):
+        input = torch.tensor([[[[
+            [0., 0., 0., 0., 0.],
+            [0., 1., 0., 0., 0.],
+            [0., 0., 0., 0., 0.],
+            [0., 0., 0., 1., 0.],
+            [0., 0., 0., 0., 0.],
+        ]]]])
+        softargmax = kornia.ConvSoftArgmax3d((1, 3, 3), (1, 2, 2), (0, 0, 0),
+                                             temperature=10.,
+                                             normalized_coordinates=True,
+                                             output_value=True)
+        expected_val = torch.tensor([[[[[0.1214, 0.],
+                                       [0., 0.1214]]]]])
+        expected_coord = torch.tensor([[[
+            [[[-1., -1.],
+              [-1., -1.]]],
+            [[[-0.5, 0.5],
+              [-0.5, 0.5]]],
+            [[[-0.5, -0.5],
+              [0.5, 0.5]]]]]])
+        coords, val = softargmax(input)
+        assert_allclose(val, expected_val)
+        assert_allclose(coords, expected_coord)

@@ -132,10 +132,10 @@ class ScaleSpaceDetector(nn.Module):
         lafs: torch.Tensor = torch.cat(all_lafs, dim=1)
         responses, idxs = torch.topk(responses, k=num_feats, dim=1)
         lafs = lafs[:, idxs.view(-1), :, :]
-        return responses, lafs
+        return responses, denormalize_laf(lafs, img)
 
     def forward(self, img: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:  # type: ignore
         responses, lafs = self.detect(img, self.num_features)
         lafs = self.aff(lafs, img)
         lafs = self.ori(lafs, img)
-        return denormalize_laf(lafs, img), responses
+        return lafs, responses

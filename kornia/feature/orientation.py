@@ -12,7 +12,6 @@ from kornia.feature import (extract_patches_from_pyramid, make_upright,
 from kornia.geometry import rad2deg
 
 
-
 class PassLAF(nn.Module):
     """Dummy module to use instead of local feature orientation or affine shape estimator
     """

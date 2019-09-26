@@ -22,7 +22,7 @@ class PatchAffineShapeEstimator(nn.Module):
         self.weighting: torch.Tensor = get_gaussian_kernel2d((self.patch_size, self.patch_size), (sigma, sigma), True)
         return
 
-    def forward(self, patch: torch.Tensor) -> torch.Tensor:
+    def forward(self, patch: torch.Tensor) -> torch.Tensor:   # type: ignore
         if not torch.is_tensor(patch):
             raise TypeError("Input type is not a torch.Tensor. Got {}"
                             .format(type(patch)))
@@ -70,9 +70,9 @@ class LAFAffineShapeEstimator(nn.Module):
                                                                                                 self.patch_size,
                                                                                                 self.patch_size)
         ellipse_shape: torch.Tensor = self.affine_shape_detector(patches)
-        ellipses = torch.cat([laf.view(-1, 2, 3)[...,2].unsqueeze(1), ellipse_shape], dim=2).view(B, N, 5)
+        ellipses = torch.cat([laf.view(-1, 2, 3)[..., 2].unsqueeze(1), ellipse_shape], dim=2).view(B, N, 5)
         scale_orig = get_laf_scale(laf)
         laf_out = ellipse_to_laf(ellipses)
         ellipse_scale = get_laf_scale(laf_out)
-        laf_out = scale_laf(laf_out, scale_orig/ellipse_scale)
+        laf_out = scale_laf(laf_out, scale_orig / ellipse_scale)
         return laf_out

@@ -280,7 +280,7 @@ def conv_soft_argmax3d(input: torch.Tensor,
                        normalized_coordinates: bool = False,
                        eps: float = 1e-8,
                        output_value: bool = True) -> Union[torch.Tensor,
-                                                            Tuple[torch.Tensor, torch.Tensor]]:
+                                                           Tuple[torch.Tensor, torch.Tensor]]:
     """
     Function that computes the convolutional spatial Soft-Argmax 3D over the windows
     of a given input heatmap. Function has two outputs: argmax coordinates and the softmaxpooled heatmap values

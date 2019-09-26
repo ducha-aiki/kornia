@@ -108,6 +108,7 @@ def make_upright(laf: torch.Tensor, eps: float = 1e-9) -> torch.Tensor:
     laf_unit_scale = torch.cat([torch.cat([laf1_ell, laf2_ell], dim=2), laf[..., :, 2:3]], dim=3)
     return scale_laf(laf_unit_scale, scale)
 
+
 def ellipse_to_laf(ells: torch.Tensor) -> torch.Tensor:
     """
     Converts ellipse regions to LAF format. Ellipse (a, b, c)

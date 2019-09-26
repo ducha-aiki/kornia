@@ -4,7 +4,6 @@ kornia/color/rgb.py
 kornia/color/normalize.py
 kornia/contrib/extract_patches.py
 kornia/contrib/max_blur_pool.py
-kornia/feature/harris.py
 kornia/feature/nms.py
 kornia/filters/blur.py
 kornia/filters/gaussian.py

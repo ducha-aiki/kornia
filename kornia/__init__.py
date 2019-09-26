@@ -31,7 +31,7 @@ from kornia.contrib import (
 )
 from kornia.feature import (
     non_maxima_suppression2d,
-    corner_harris,
+    harris_response,
     SIFTDescriptor
 )
 from kornia.filters import (

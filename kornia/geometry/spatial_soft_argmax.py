@@ -91,6 +91,16 @@ class ConvSoftArgmax2d(nn.Module):
         self.output_value = output_value
         return
 
+    def __repr__(self) -> str:
+        return self.__class__.__name__ +\
+            '(' + 'kernel_size=' + str(self.kernel_size) +\
+            ', ' + 'stride=' + str(self.stride) +\
+            ', ' + 'padding=' + str(self.padding) +\
+            ', ' + 'temperature=' + str(self.temperature) +\
+            ', ' + 'normalized_coordinates=' + str(self.normalized_coordinates) +\
+            ', ' + 'eps=' + str(self.eps) +\
+            ', ' + 'output_value=' + str(self.output_value) + ')'
+
     def forward(self, x: torch.Tensor):  # type: ignore
         return conv_soft_argmax2d(x,
                                   self.kernel_size,
@@ -108,9 +118,9 @@ class ConvSoftArgmax3d(nn.Module):
                  stride: Tuple[int, int, int] = (1, 1, 1),
                  padding: Tuple[int, int, int] = (1, 1, 1),
                  temperature: Union[torch.Tensor, float] = torch.tensor(1.0),
-                 normalized_coordinates: bool = True,
+                 normalized_coordinates: bool = False,
                  eps: float = 1e-8,
-                 output_value: bool = False) -> None:
+                 output_value: bool = True) -> None:
         super(ConvSoftArgmax3d, self).__init__()
         self.kernel_size = kernel_size
         self.stride = stride
@@ -120,6 +130,16 @@ class ConvSoftArgmax3d(nn.Module):
         self.eps = eps
         self.output_value = output_value
         return
+
+    def __repr__(self) -> str:
+        return self.__class__.__name__ +\
+            '(' + 'kernel_size=' + str(self.kernel_size) +\
+            ', ' + 'stride=' + str(self.stride) +\
+            ', ' + 'padding=' + str(self.padding) +\
+            ', ' + 'temperature=' + str(self.temperature) +\
+            ', ' + 'normalized_coordinates=' + str(self.normalized_coordinates) +\
+            ', ' + 'eps=' + str(self.eps) +\
+            ', ' + 'output_value=' + str(self.output_value) + ')'
 
     def forward(self, x: torch.Tensor):  # type: ignore
         return conv_soft_argmax3d(x,
@@ -257,9 +277,9 @@ def conv_soft_argmax3d(input: torch.Tensor,
                        stride: Tuple[int, int, int] = (1, 1, 1),
                        padding: Tuple[int, int, int] = (1, 1, 1),
                        temperature: Union[torch.Tensor, float] = torch.tensor(1.0),
-                       normalized_coordinates: bool = True,
+                       normalized_coordinates: bool = False,
                        eps: float = 1e-8,
-                       output_value: bool = False) -> Union[torch.Tensor,
+                       output_value: bool = True) -> Union[torch.Tensor,
                                                             Tuple[torch.Tensor, torch.Tensor]]:
     """
     Function that computes the convolutional spatial Soft-Argmax 3D over the windows
@@ -270,9 +290,13 @@ def conv_soft_argmax3d(input: torch.Tensor,
 
     .. math::
         ijk(X) = \frac{\sum_{(i,j,k) * exp(x / T)  \in X}} {\sum_{exp(x / T)  \in X}}
+
         val(X) = \frac{\sum_{x * exp(x / T)  \in X}} {\sum_{exp(x / T)  \in X}}
 
     - where T is temperature.
+        [:,:, 0, ...] is i == depth (scale)
+        [:,:, 1, ...] is j == x
+        [:,:, 2, ...] is k == y
 
     Args:
         kernel_size (Tuple([int,int,int])): the size of the window
@@ -282,7 +306,7 @@ def conv_soft_argmax3d(input: torch.Tensor,
         normalized_coordinates (bool): whether to return the
           coordinates normalized in the range of [-1, 1]. Otherwise,
           it will return the coordinates in the range of the input shape.
-          Default is True.
+          Default is False.
         eps (float): small value to avoid zero division. Default is 1e-8.
         output_value(bool): if True, val is outputed, if False, only ij
 
@@ -292,7 +316,7 @@ def conv_soft_argmax3d(input: torch.Tensor,
         - Output: math:`(N, C, 3, D_{out}, H_{out}, W_{out})`, :math:`(N, C, D_{out}, H_{out}, W_{out})`, where
 
           .. math::
-              H_{out} = \left\lfloor\frac{D_{in}  + 2 \times \text{padding}[0] -
+              D_{out} = \left\lfloor\frac{D_{in}  + 2 \times \text{padding}[0] -
               (\text{kernel\_size}[0] - 1) - 1}{\text{stride}[0]} + 1\right\rfloor
 
           .. math::
@@ -363,8 +387,9 @@ def conv_soft_argmax3d(input: torch.Tensor,
 
     coords_max = coords_max / den.expand_as(coords_max)
     coords_max = coords_max + grid_global_pooled.expand_as(coords_max)
-    # [:,:, 0, ...] is x
-    # [:,:, 1, ...] is y
+    # [:,:, 0, ...] is depth (scale)
+    # [:,:, 1, ...] is x
+    # [:,:, 2, ...] is y
 
     if normalized_coordinates:
         coords_max = normalize_pixel_coordinates3d(coords_max.permute(0, 2, 3, 4, 1), d, h, w)

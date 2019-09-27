@@ -66,13 +66,14 @@ class TestLAFAffineShapeEstimator:
         inp[:, :, 15:-15, 9:-9] = 1
         laf = torch.tensor([[[[20., 0., 16.], [0., 20., 16.]]]])
         new_laf = aff(laf, inp)
-        expected = torch.tensor([[[[36.24, 0., 16.], [0., 11.036, 16.]]]])
-        assert_allclose(new_laf, expected)
+        expected = torch.tensor([[[[36.246, 0., 16.], [0., 11.036, 16.]]]])
+        assert_allclose(new_laf, expected, atol=1e-4, rtol=1e-4)
 
     def test_gradcheck(self):
-        batch_size, channels, height, width = 1, 1, 41, 41
-        patches = torch.rand(batch_size, channels, height, width)
+        batch_size, channels, height, width = 1, 1, 21, 21
+        patches = torch.rand(batch_size, channels, height, width).float()
         patches = utils.tensor_to_gradcheck_var(patches)  # to var
-        laf = torch.ones(batch_size, 4, 2, 3)
-        assert gradcheck(LAFAffineShapeEstimator(), (laf, patches),
-                         raise_exception=True)
+        laf = torch.ones(batch_size, 4, 2, 3).float()
+        laf = utils.tensor_to_gradcheck_var(laf)  # to var
+        assert gradcheck(LAFAffineShapeEstimator(8), (laf, patches),
+                         raise_exception=True, rtol=1e-4, atol=1e-4)

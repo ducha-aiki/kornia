@@ -13,16 +13,8 @@ class TestScaleSpaceDetector:
         n_feats = 10
         det = ScaleSpaceDetector(n_feats)
         lafs, resps = det(inp)
-        assert laf.shape == torch.Size([1, n_feats, 2, 3])
+        assert lafs.shape == torch.Size([1, n_feats, 2, 3])
         assert resps.shape == torch.Size([1, n_feats])
-
-    def test_shape_batch(self):
-        inp = torch.rand(6, 1, 32, 32)
-        n_feats = 10
-        det = ScaleSpaceDetector(n_feats)
-        lafs, resps = det(inp)
-        assert lafs.shape == torch.Size([6, n_feats, 2, 3])
-        assert resps.shape == torch.Size([6, n_feats])
 
     def test_print(self):
         sift = ScaleSpaceDetector()
@@ -35,17 +27,15 @@ class TestScaleSpaceDetector:
         det = ScaleSpaceDetector(n_feats,
                                  resp_module=kornia.feature.BlobHessian(),
                                  mr_size=3.0)
-        det = ScaleSpaceDetector(n_feats)
         lafs, resps = det(inp)
-        expected_laf = torch.tensor([[[[12.4996, 0.0000, 16.4997], [0.0, 12.4996, 16.4997]]]])
-        expected_resp = torch.tensor([[0.0599]])
+        expected_laf = torch.tensor([[[[12.1187, 0.0000, 15.9958], [0.0, 12.1187, 15.9958]]]])
+        expected_resp = torch.tensor([[0.0699]])
         assert_allclose(expected_laf, lafs)
         assert_allclose(expected_resp, resps)
 
     def test_gradcheck(self):
-        batch_size, channels, height, width = 1, 1, 41, 41
+        batch_size, channels, height, width = 1, 1, 31, 21
         patches = torch.rand(batch_size, channels, height, width)
         patches = utils.tensor_to_gradcheck_var(patches)  # to var
-        laf = torch.rand(batch_size, 4, 2, 3)
-        assert gradcheck(ScaleSpaceDetector(), (laf, patches),
+        assert gradcheck(ScaleSpaceDetector(2), (patches),
                          raise_exception=True)

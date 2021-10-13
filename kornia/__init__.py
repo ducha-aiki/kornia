@@ -1,87 +1,115 @@
 # Make sure that kornia is running on Python 3.6.0 or later
 # (to avoid running into this bug: https://bugs.python.org/issue29246)
 import sys
+
 if sys.version_info < (3, 6, 0):
     raise RuntimeError("Kornia requires Python 3.6.0 or later")
 
-from .version import __version__
+try:
+    from .version import __version__
+except ImportError:
+    pass
 
-from kornia import color
-from kornia import contrib
-from kornia import feature
-from kornia import filters
-from kornia import geometry
-from kornia import losses
-from kornia import utils
-from kornia import augmentation
-
-# Exposes package functional to top level
-
+from kornia import (
+    augmentation,
+    color,
+    contrib,
+    enhance,
+    feature,
+    filters,
+    geometry,
+    jit,
+    losses,
+    metrics,
+    morphology,
+    utils,
+    x,
+)
 from kornia.color import (
-    rgb_to_grayscale,
     bgr_to_grayscale,
     bgr_to_rgb,
-    rgb_to_bgr,
-    rgb_to_hsv,
-    hsv_to_rgb,
-    rgb_to_hls,
-    rgb_to_yuv,
-    yuv_to_rgb,
+    bgr_to_rgba,
+    grayscale_to_rgb,
     hls_to_rgb,
-    normalize,
-    denormalize,
+    hsv_to_rgb,
+    lab_to_rgb,
+    luv_to_rgb,
+    rgb_to_bgr,
+    rgb_to_grayscale,
+    rgb_to_hls,
+    rgb_to_hsv,
+    rgb_to_lab,
+    rgb_to_luv,
+    rgb_to_rgba,
+    rgb_to_xyz,
+    rgb_to_ycbcr,
+    rgb_to_yuv,
+    rgba_to_bgr,
+    rgba_to_rgb,
+    xyz_to_rgb,
+    ycbcr_to_rgb,
+    yuv_to_rgb,
+)
+from kornia.constants import *
+from kornia.contrib import extract_tensor_patches
+from kornia.enhance import (
     adjust_brightness,
     adjust_contrast,
     adjust_gamma,
     adjust_hue,
     adjust_saturation,
+    denormalize,
+    linear_transform,
+    normalize,
+    normalize_min_max,
+    zca_mean,
+    zca_whiten,
 )
-from kornia.contrib import (
-    extract_tensor_patches,
-    max_blur_pool2d,
-)
-from kornia.feature import (
-    non_maxima_suppression2d,
-    harris_response,
-    SIFTDescriptor
-)
+from kornia.feature import DeFMO, gftt_response, harris_response, hessian_response, MKDDescriptor, nms2d, SIFTDescriptor
 from kornia.filters import (
+    box_blur,
+    canny,
+    filter2d,
+    filter3d,
+    gaussian_blur2d,
+    get_gaussian_discrete_kernel1d,
+    get_gaussian_erf_kernel1d,
     get_gaussian_kernel1d,
     get_gaussian_kernel2d,
     get_laplacian_kernel1d,
     get_laplacian_kernel2d,
     get_motion_kernel2d,
-    gaussian_blur2d,
+    get_motion_kernel3d,
     laplacian,
-    sobel,
-    spatial_gradient,
-    box_blur,
     median_blur,
     motion_blur,
-    filter2D,
+    motion_blur3d,
+    sobel,
+    spatial_gradient,
+    unsharp_mask,
 )
+from kornia.geometry import *
 from kornia.losses import (
-    ssim,
     dice_loss,
-    tversky_loss,
     inverse_depth_smoothness_loss,
-    total_variation,
-    psnr_loss,
-    kl_div_loss_2d,
     js_div_loss_2d,
+    kl_div_loss_2d,
+    psnr_loss,
+    ssim,
+    total_variation,
+    tversky_loss,
 )
+from kornia.testing import xla_is_available
 from kornia.utils import (
-    one_hot,
     create_meshgrid,
-    tensor_to_image,
     image_to_tensor,
-    save_pointcloud_ply,
     load_pointcloud_ply,
-)
-from kornia.augmentation import (
-    random_hflip,
-    color_jitter,
+    one_hot,
+    save_pointcloud_ply,
+    tensor_to_image,
 )
 
-from kornia.geometry import *
-from kornia.geometry import pi
+# Exposes package functional to top level
+
+
+# Exposes package functional to top level

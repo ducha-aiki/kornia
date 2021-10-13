@@ -1,147 +1,164 @@
-from typing import Tuple
+import warnings
+from typing import Optional, Tuple
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
-from kornia.utils import create_meshgrid
-from kornia.geometry.linalg import transform_points
-
+import kornia.geometry.transform.homography_warper as HMW
 
 __all__ = [
     "HomographyWarper",
     "homography_warp",
+    "homography_warp3d",
+    "warp_grid",
+    "warp_grid3d",
+    "normalize_homography",
+    "normalize_homography3d",
+    "normal_transform_pixel",
+    "normal_transform_pixel3d",
 ]
 
 
-# layer api
+def warp_grid(grid: torch.Tensor, src_homo_dst: torch.Tensor) -> torch.Tensor:
+    __doc__ = HMW.warp_grid.__doc__  # skipcq: PYL-W0612
+    warnings.warn(
+        "`warp_grid` is deprecated and will be removed > 0.6.0. "
+        "Please use `kornia.geometry.transform.warp_grid instead.`",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return HMW.warp_grid(grid, src_homo_dst)
 
-class HomographyWarper(nn.Module):
-    r"""Warps image patches or tensors by homographies.
 
-    .. math::
-
-        X_{dst} = H_{src}^{\{dst\}} * X_{src}
-
-    Args:
-        height (int): The height of the image to warp.
-        width (int): The width of the image to warp.
-        mode (str): interpolation mode to calculate output values
-          'bilinear' | 'nearest'. Default: 'bilinear'.
-        padding_mode (str): padding mode for outside grid values
-          'zeros' | 'border' | 'reflection'. Default: 'zeros'.
-        normalized_coordinates (bool): wether to use a grid with
-          normalized coordinates.
-    """
-
-    def __init__(
-            self,
-            height: int,
-            width: int,
-            mode: str = 'bilinear',
-            padding_mode: str = 'zeros',
-            normalized_coordinates: bool = True) -> None:
-        super(HomographyWarper, self).__init__()
-        self.width: int = width
-        self.height: int = height
-        self.mode: str = mode
-        self.padding_mode: str = padding_mode
-        self.normalized_coordinates: bool = normalized_coordinates
-
-        # create base grid to compute the flow
-        self.grid: torch.Tensor = create_meshgrid(
-            height, width, normalized_coordinates=normalized_coordinates)
-
-    def warp_grid(self, dst_homo_src: torch.Tensor) -> torch.Tensor:
-        r"""Computes the grid to warp the coordinates grid by an homography.
-
-        Args:
-            dst_homo_src (torch.Tensor): Homography or homographies (stacked) to
-                              transform all points in the grid. Shape of the
-                              homography has to be :math:`(N, 3, 3)`.
-
-        Returns:
-            torch.Tensor: the transformed grid of shape :math:`(N, H, W, 2)`.
-        """
-        batch_size: int = dst_homo_src.shape[0]
-        device: torch.device = dst_homo_src.device
-        dtype: torch.dtype = dst_homo_src.dtype
-        # expand grid to match the input batch size
-        grid: torch.Tensor = self.grid.expand(batch_size, -1, -1, -1)  # NxHxWx2
-        if len(dst_homo_src.shape) == 3:  # local homography case
-            dst_homo_src = dst_homo_src.view(batch_size, 1, 3, 3)  # NxHxWx3x3
-        # perform the actual grid transformation,
-        # the grid is copied to input device and casted to the same type
-        flow: torch.Tensor = transform_points(
-            dst_homo_src, grid.to(device).to(dtype))  # NxHxWx2
-        return flow.view(batch_size, self.height, self.width, 2)  # NxHxWx2
-
-    def forward(  # type: ignore
-            self,
-            patch_src: torch.Tensor,
-            dst_homo_src: torch.Tensor) -> torch.Tensor:
-        r"""Warps an image or tensor from source into reference frame.
-
-        Args:
-            patch_src (torch.Tensor): The image or tensor to warp.
-                                      Should be from source.
-            dst_homo_src (torch.Tensor): The homography or stack of homographies
-             from source to destination. The homography assumes normalized
-             coordinates [-1, 1].
-
-        Return:
-            torch.Tensor: Patch sampled at locations from source to destination.
-
-        Shape:
-            - Input: :math:`(N, C, H, W)` and :math:`(N, 3, 3)`
-            - Output: :math:`(N, C, H, W)`
-
-        Example:
-            >>> input = torch.rand(1, 3, 32, 32)
-            >>> homography = torch.eye(3).view(1, 3, 3)
-            >>> warper = kornia.HomographyWarper(32, 32)
-            >>> output = warper(input, homography)  # NxCxHxW
-        """
-        if not dst_homo_src.device == patch_src.device:
-            raise TypeError("Patch and homography must be on the same device. \
-                            Got patch.device: {} dst_H_src.device: {}."
-                            .format(patch_src.device, dst_homo_src.device))
-        return F.grid_sample(patch_src, self.warp_grid(dst_homo_src),
-                             mode=self.mode, padding_mode=self.padding_mode)
+def warp_grid3d(grid: torch.Tensor, src_homo_dst: torch.Tensor) -> torch.Tensor:
+    __doc__ = HMW.warp_grid3d.__doc__  # skipcq: PYL-W0612
+    warnings.warn(
+        "`warp_grid3d` is deprecated. Please use `kornia.geometry.transform.warp_grid3d instead.`",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return HMW.warp_grid3d(grid, src_homo_dst)
 
 
 # functional api
+def homography_warp(
+    patch_src: torch.Tensor,
+    src_homo_dst: torch.Tensor,
+    dsize: Tuple[int, int],
+    mode: str = 'bilinear',
+    padding_mode: str = 'zeros',
+    align_corners: bool = False,
+    normalized_coordinates: bool = True,
+) -> torch.Tensor:
+    __doc__ = HMW.homography_warp.__doc__  # skipcq: PYL-W0612
+    warnings.warn(
+        "`homography_warp` is deprecated and will be removed > 0.6.0."
+        "Please use `kornia.geometry.transform.homography_warp instead.`",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return HMW.homography_warp(
+        patch_src, src_homo_dst, dsize, mode, padding_mode, align_corners, normalized_coordinates
+    )
 
 
-def homography_warp(patch_src: torch.Tensor,
-                    dst_homo_src: torch.Tensor,
-                    dsize: Tuple[int, int],
-                    mode: str = 'bilinear',
-                    padding_mode: str = 'zeros') -> torch.Tensor:
-    r"""Function that warps image patchs or tensors by homographies.
+def homography_warp3d(
+    patch_src: torch.Tensor,
+    src_homo_dst: torch.Tensor,
+    dsize: Tuple[int, int, int],
+    mode: str = 'bilinear',
+    padding_mode: str = 'zeros',
+    align_corners: bool = False,
+    normalized_coordinates: bool = True,
+) -> torch.Tensor:
+    __doc__ = HMW.homography_warp3d.__doc__  # skipcq: PYL-W0612
+    warnings.warn(
+        "`homography_warp3d` is deprecated and will be removed > 0.6.0. "
+        "Please use `kornia.geometry.transform.homography_warp3d instead.`",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return HMW.homography_warp3d(
+        patch_src, src_homo_dst, dsize, mode, padding_mode, align_corners, normalized_coordinates
+    )
 
-    See :class:`~kornia.geometry.warp.HomographyWarper` for details.
 
-    Args:
-        patch_src (torch.Tensor): The image or tensor to warp. Should be from
-                                  source of shape :math:`(N, C, H, W)`.
-        dst_homo_src (torch.Tensor): The homography or stack of homographies
-                                     from source to destination of shape
-                                     :math:`(N, 3, 3)`.
-        dsize (Tuple[int, int]): The height and width of the image to warp.
-        mode (str): interpolation mode to calculate output values
-          'bilinear' | 'nearest'. Default: 'bilinear'.
-        padding_mode (str): padding mode for outside grid values
-          'zeros' | 'border' | 'reflection'. Default: 'zeros'.
+class HomographyWarper(HMW.HomographyWarper):
+    __doc__ = HMW.HomographyWarper.__doc__  # skipcq: PYL-W0612
 
-    Return:
-        torch.Tensor: Patch sampled at locations from source to destination.
+    def __init__(
+        self,
+        height: int,
+        width: int,
+        mode: str = 'bilinear',
+        padding_mode: str = 'zeros',
+        normalized_coordinates: bool = True,
+        align_corners: bool = False,
+    ) -> None:
+        super().__init__(height, width, mode, padding_mode, normalized_coordinates, align_corners)
+        warnings.warn(
+            "`HomographyWarper` is deprecated and will be removed > 0.6.0. "
+            "Please use `kornia.geometry.transform.HomographyWarper instead.`",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
-    Example:
-        >>> input = torch.rand(1, 3, 32, 32)
-        >>> homography = torch.eye(3).view(1, 3, 3)
-        >>> output = kornia.homography_warp(input, homography, (32, 32))
-    """
-    height, width = dsize
-    warper = HomographyWarper(height, width, mode, padding_mode)
-    return warper(patch_src, dst_homo_src)
+
+def normal_transform_pixel(
+    height: int,
+    width: int,
+    eps: float = 1e-14,
+    device: Optional[torch.device] = None,
+    dtype: Optional[torch.dtype] = None,
+) -> torch.Tensor:
+    __doc__ = HMW.normal_transform_pixel.__doc__  # skipcq: PYL-W0612
+    warnings.warn(
+        "`normal_transform_pixel` is deprecated and will be removed > 0.6.0."
+        "Please use `kornia.geometry.transform.normal_transform_pixel instead.`",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return HMW.normal_transform_pixel(height, width, eps, device, dtype)
+
+
+def normal_transform_pixel3d(
+    depth: int,
+    height: int,
+    width: int,
+    eps: float = 1e-14,
+    device: Optional[torch.device] = None,
+    dtype: Optional[torch.dtype] = None,
+) -> torch.Tensor:
+    __doc__ = HMW.normal_transform_pixel3d.__doc__  # skipcq: PYL-W0612
+    warnings.warn(
+        "`normal_transform_pixel3d` is deprecated and will be removed > 0.6.0. "
+        "Please use `kornia.geometry.transform.normal_transform_pixel3d instead.`",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return HMW.normal_transform_pixel3d(depth, height, width, eps, device=device, dtype=dtype)
+
+
+def normalize_homography(
+    dst_pix_trans_src_pix: torch.Tensor, dsize_src: Tuple[int, int], dsize_dst: Tuple[int, int]
+) -> torch.Tensor:
+    __doc__ = HMW.normalize_homography.__doc__  # skipcq: PYL-W0612
+    warnings.warn(
+        "`normalize_homography` is deprecated and will be removed > 0.6.0. "
+        "Please use `kornia.geometry.transform.normalize_homography instead.`",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return HMW.normalize_homography(dst_pix_trans_src_pix, dsize_src, dsize_dst)
+
+
+def normalize_homography3d(
+    dst_pix_trans_src_pix: torch.Tensor, dsize_src: Tuple[int, int, int], dsize_dst: Tuple[int, int, int]
+) -> torch.Tensor:
+    __doc__ = HMW.normalize_homography3d.__doc__  # skipcq: PYL-W0612
+    warnings.warn(
+        "`normalize_homography3d` is deprecated and will be removed > 0.6.0. "
+        "Please use `kornia.geometry.transform.normalize_homography3d instead.`",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return HMW.normalize_homography3d(dst_pix_trans_src_pix, dsize_src, dsize_dst)

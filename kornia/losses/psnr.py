@@ -1,47 +1,67 @@
 import torch
 import torch.nn as nn
-from torch.nn.functional import mse_loss
+from torch.nn.functional import mse_loss as mse
 
-
-class PSNRLoss(nn.Module):
-    r"""Creates a criterion that calculates the PSNR between 2 images. Given an m x n image,
-    .. math::
-    \text{MSE}(I,T) = \frac{1}{m\,n}\sum_{i=0}^{m-1}\sum_{j=0}^{n-1} [I(i,j) - T(i,j)]^2
-
-    Arguments:
-        max_val (float): Maximum value of input
-
-    Shape:
-        - input: :math:`(*)`
-        - approximation: :math:`(*)` same shape as input
-        - output: :math:`()` a scalar
-
-    Examples:
-        >>> kornia.losses.psnr(torch.ones(1), 1.2*torch.ones(1), 2)
-        tensor(20.0000) # 10 * log(4/((1.2-1)**2)) / log(10)
-
-    reference:
-        https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio#Definition
-    """
-
-    def __init__(self, max_val: float) -> None:
-        super(PSNRLoss, self).__init__()
-        self.max_val: float = max_val
-
-    def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return psnr_loss(input, target, self.max_val)
+import kornia.metrics as metrics
 
 
 def psnr_loss(input: torch.Tensor, target: torch.Tensor, max_val: float) -> torch.Tensor:
-    r"""Function that computes PSNR
+    r"""Function that computes the PSNR loss.
 
-    See :class:`~kornia.losses.PSNR` for details.
+    The loss is computed as follows:
+
+     .. math::
+
+        \text{loss} = -\text{psnr(x, y)}
+
+    See :meth:`~kornia.losses.psnr` for details abut PSNR.
+
+    Args:
+        input: the input image with shape :math:`(*)`.
+        labels : the labels image with shape :math:`(*)`.
+        max_val: The maximum value in the input tensor.
+
+    Return:
+        the computed loss as a scalar.
+
+    Examples:
+        >>> ones = torch.ones(1)
+        >>> psnr_loss(ones, 1.2 * ones, 2.) # 10 * log(4/((1.2-1)**2)) / log(10)
+        tensor(-20.0000)
     """
-    if not torch.is_tensor(input) or not torch.is_tensor(target):
-        raise TypeError(f"Expected 2 torch tensors but got {type(input)} and {type(target)}")
 
-    if input.shape != target.shape:
-        raise TypeError(f"Expected tensors of equal shapes, but got {input.shape} and {target.shape}")
-    mse_val = mse_loss(input, target, reduction='mean')
-    max_val_tensor: torch.Tensor = torch.tensor(max_val).to(input.device).to(input.dtype)
-    return 10 * torch.log10(max_val_tensor * max_val_tensor / mse_val)
+    return -1.0 * metrics.psnr(input, target, max_val)
+
+
+class PSNRLoss(nn.Module):
+    r"""Create a criterion that calculates the PSNR loss.
+
+    The loss is computed as follows:
+
+     .. math::
+
+        \text{loss} = -\text{psnr(x, y)}
+
+    See :meth:`~kornia.losses.psnr` for details abut PSNR.
+
+    Args:
+        max_val: The maximum value in the input tensor.
+
+    Shape:
+        - Input: arbitrary dimensional tensor :math:`(*)`.
+        - Target: arbitrary dimensional tensor :math:`(*)` same shape as input.
+        - Output: a scalar.
+
+    Examples:
+        >>> ones = torch.ones(1)
+        >>> criterion = PSNRLoss(2.)
+        >>> criterion(ones, 1.2 * ones) # 10 * log(4/((1.2-1)**2)) / log(10)
+        tensor(-20.0000)
+    """
+
+    def __init__(self, max_val: float) -> None:
+        super().__init__()
+        self.max_val: float = max_val
+
+    def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        return psnr_loss(input, target, self.max_val)

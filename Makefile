@@ -1,32 +1,63 @@
-.PHONY: test test-cpu test-gpu lint mypy build-docs install uninstall FORCE
+.PHONY: test test-cpu test-cuda lint mypy build-docs install uninstall FORCE
 
-test: mypy lint test-cpu
+test: mypy lint build-docs test-all
+# TODO: Add cuda-float16 when #649 is solved
+test-all: FORCE
+	pytest -v --device all --dtype float32,float64 --cov=kornia test/ --flake8 --mypy
 
 test-cpu: FORCE
-	pytest --typetest cpu -v
+	pytest -v --device cpu --dtype all --cov=kornia test/ --flake8 --mypy
 
-test-cpu-cov: FORCE
-	pytest --typetest cpu -v --cov=kornia test
+test-cuda: FORCE
+	pytest -v --device cuda --dtype all --cov=kornia test/ --flake8 --mypy
 
-test-gpu: FORCE
-	pytest --typetest cuda -v
+test-module: FORCE
+	pytest -v --device all --dtype all  test/$(module) --flake8 --mypy
+
+test-jit: FORCE
+	pytest -v --device all --dtype all -m jit
+
+test-gradcheck: FORCE
+	pytest -v --device all --dtype all -m grad
+
+test-nn: FORCE
+	pytest -v --device all --dtype all -m nn
+
+test-quick: FORCE
+	pytest -v --device all --dtype all -m "not (jit or grad or nn)"
+
+test-slow: FORCE
+	pytest -v --device all --dtype all -m "(jit or grad or nn)"
 
 lint: FORCE
-	python verify.py --check lint
+	pytest -v --cache-clear --flake8 kornia/ examples/ test/ -m flake8
+
+mypy: FORCE
+	pytest -v --cache-clear --mypy kornia/ -m mypy
 
 autopep8: FORCE
 	autopep8 --in-place --aggressive --recursive kornia/ test/ examples/
 
-mypy: FORCE
-	python verify.py --check mypy
+yapf: FORCE
+	yapf --in-place --parallel --recursive kornia/ test/ examples/
+
+doctest:
+	pytest -v --doctest-modules kornia/
+
+docstyle: FORCE
+	pydocstyle kornia/
 
 build-docs: FORCE
-	python verify.py --check build-docs
+	cd docs; make clean html
 
 install: FORCE
 	python setup.py install
 
+install-dev: FORCE
+	python setup.py develop
+
+benchmark: FORCE
+	for f in test/performance/*.py  ; do python -utt $${f}; done
+
 uninstall: FORCE
 	pip uninstall kornia
-
-FORCE:

@@ -597,15 +597,19 @@ def conv_quad_interp3d(
         raise ValueError(f"Invalid input shape, we expect BxCxDxHxW. Got: {input.shape}")
 
     B, CH, D, H, W = input.shape
-    grid_global: torch.Tensor = create_meshgrid3d(D, H, W, False, device=input.device).permute(0, 4, 1, 2, 3)
-    grid_global = grid_global.to(input.dtype)
-
+    from time import time
+    t=time()
+    grid_global: torch.Tensor = create_meshgrid3d(D, H, W, False,device=input.device, dtype=input.dtype).permute(0, 4, 1, 2, 3)
+    print (f'{time() - t:.6f} grid generation')
     # to determine the location we are solving system of linear equations Ax = b, where b is 1st order gradient
     # and A is Hessian matrix
+    t=time()
     b: torch.Tensor = kornia.filters.spatial_gradient3d(input, order=1, mode='diff')  #
     b = b.permute(0, 1, 3, 4, 5, 2).reshape(-1, 3, 1)
     A: torch.Tensor = kornia.filters.spatial_gradient3d(input, order=2, mode='diff')
     A = A.permute(0, 1, 3, 4, 5, 2).reshape(-1, 6)
+    print (f'{time() - t:.6f} grad and permute')
+    t=time()
     dxx = A[..., 0]
     dyy = A[..., 1]
     dss = A[..., 2]
@@ -614,13 +618,19 @@ def conv_quad_interp3d(
     dxs = 0.25 * A[..., 5]  # normalization to match OpenCV implementation
 
     Hes = torch.stack([dxx, dxy, dxs, dxy, dyy, dys, dxs, dys, dss], dim=-1).view(-1, 3, 3)
+    print (f'{time() - t:.6f} matrix generation')
 
     # The following is needed to avoid singular cases
     Hes += torch.rand(Hes[0].size(), device=Hes.device).abs()[None] * eps
 
+    t=time()
     nms_mask: torch.Tensor = kornia.feature.nms3d(input, (3, 3, 3), True)
+    print (f'{time() - t:.6f} nms3d_for max ')
+    t=time()
     x_solved: torch.Tensor = torch.zeros_like(b)
     x_solved_masked, _ = _torch_solve_cast(b[nms_mask.view(-1)], Hes[nms_mask.view(-1)])
+    print (f'{time() - t:.6f} solve cast')
+    t=time()
     x_solved.masked_scatter_(nms_mask.view(-1, 1, 1), x_solved_masked)
     dx: torch.Tensor = -x_solved
 
@@ -635,6 +645,7 @@ def conv_quad_interp3d(
     dx_res: torch.Tensor = dx.flip(1).reshape(B, CH, D, H, W, 3).permute(0, 1, 5, 2, 3, 4)
     coords_max: torch.Tensor = grid_global.repeat(B, 1, 1, 1, 1).unsqueeze(1)
     coords_max = coords_max + dx_res
+    print (f'{time() - t:.6f} out dx dy')
 
     return coords_max, y_max
 

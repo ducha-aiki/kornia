@@ -127,15 +127,18 @@ class ScaleSpaceDetector(nn.Module):
     def detect(
         self, img: torch.Tensor, num_feats: int, mask: Optional[torch.Tensor] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        from time import time
+        t=time()
         dev: torch.device = img.device
         dtype: torch.dtype = img.dtype
         sp, sigmas, _ = self.scale_pyr(img)
-        all_responses = []
-        all_lafs = []
+        print (f'{time() - t:.6f} scale pyramid')
+        all_responses: List[torch.Tensor] = []
+        all_lafs: List[torch.Tensor] = []
         for oct_idx, octave in enumerate(sp):
             sigmas_oct = sigmas[oct_idx]
-
             B, CH, L, H, W = octave.size()
+            t=time()
             # Run response function
             if self.scale_space_response:
                 oct_resp = self.resp(octave, sigmas_oct.view(-1))
@@ -148,18 +151,22 @@ class ScaleSpaceDetector(nn.Module):
                 # 3rd extra level is required for DoG only
                 if self.scale_pyr.extra_levels % 2 != 0:  # type: ignore
                     oct_resp = oct_resp[:, :, :-1]
-
+            print (f'{time() - t:.6f} resp')
+            t=time()
             if mask is not None:
                 oct_mask: torch.Tensor = _create_octave_mask(mask, oct_resp.shape)
                 oct_resp = oct_mask * oct_resp
 
             # Differentiable nms
             coord_max, response_max = self.nms(oct_resp)
+            print (f'{time() - t:.6f} nms')
+
             if self.minima_are_also_good:
                 coord_min, response_min = self.nms(-oct_resp)
                 take_min_mask = (response_min > response_max).to(response_max.dtype)
                 response_max = response_min * take_min_mask + (1 - take_min_mask) * response_max
                 coord_max = coord_min * take_min_mask.unsqueeze(2) + (1 - take_min_mask.unsqueeze(2)) * coord_max
+            t=time()
 
             # Now, lets crop out some small responses
             responses_flatten = response_max.view(response_max.size(0), -1)  # [B, N]
@@ -172,12 +179,15 @@ class ScaleSpaceDetector(nn.Module):
                 resp_flat_best = responses_flatten
                 max_coords_best = max_coords_flatten
             B, N = resp_flat_best.size()
+            print (f'{time() - t:.6f} cropping')
+            t=time()
 
             # Converts scale level index from ConvSoftArgmax3d to the actual scale, using the sigmas
             max_coords_best = _scale_index_to_scale(
                 max_coords_best, sigmas_oct, self.scale_pyr.n_levels  # type: ignore
             )
-
+            print (f'{time() - t:.6f} scale index to scale')
+            t=time()
             # Create local affine frames (LAFs)
             rotmat = torch.eye(2, dtype=dtype, device=dev).view(1, 1, 2, 2)
             current_lafs = torch.cat(
@@ -187,6 +197,8 @@ class ScaleSpaceDetector(nn.Module):
                 ],
                 dim=3,
             )
+            print (f'{time() - t:.6f} 2 laf')
+            t=time()
 
             # Zero response lafs, which touch the boundary
             good_mask = laf_is_inside_image(current_lafs, octave[:, 0])
@@ -194,15 +206,18 @@ class ScaleSpaceDetector(nn.Module):
 
             # Normalize LAFs
             current_lafs = normalize_laf(current_lafs, octave[:, 0])  # We don`t need # of scale levels, only shape
+            print (f'{time() - t:.6f} filter and normalize')
 
             all_responses.append(resp_flat_best)
             all_lafs.append(current_lafs)
 
         # Sort and keep best n
+        t=time()
         responses: torch.Tensor = torch.cat(all_responses, dim=1)
         lafs: torch.Tensor = torch.cat(all_lafs, dim=1)
         responses, idxs = torch.topk(responses, k=num_feats, dim=1)
         lafs = torch.gather(lafs, 1, idxs.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 2, 3))
+        print (f'{time() - t:.6f} cat and topk')
         return responses, denormalize_laf(lafs, img)
 
     def forward(  # type: ignore

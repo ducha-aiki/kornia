@@ -1,0 +1,62 @@
+# Throwaway diagnostic for kornia/kornia#5493 (CPU float16 hang on Intel AVX512-FP16 runners). Not for merging.
+name: f16-hang-probe
+on:
+  push:
+    branches: [diag/f16-hang-probe]
+permissions:
+  contents: read
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Same thread settings as kornia's CPU half-precision CI jobs.
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      PYTHONUNBUFFERED: "1"
+      PROBE_OUT: probe-out
+    steps:
+      - name: CPU
+        id: cpu
+        run: |
+          model=$(lscpu | sed -n 's/^Model name: *//p')
+          fp16=no; grep -qw avx512_fp16 /proc/cpuinfo && fp16=yes
+          echo "fp16=$fp16" >> "$GITHUB_OUTPUT"
+          echo "slot ${{ matrix.slot }}: $model | avx512_fp16=$fp16" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v4
+        if: steps.cpu.outputs.fp16 == 'yes'
+      - uses: actions/setup-python@v5
+        if: steps.cpu.outputs.fp16 == 'yes'
+        with:
+          python-version: "3.11"
+      - name: Machine details
+        if: steps.cpu.outputs.fp16 == 'yes'
+        run: |
+          mkdir -p probe-out
+          { lscpu; echo; grep -m1 '^flags' /proc/cpuinfo; grep -m1 microcode /proc/cpuinfo; uname -a; nproc; free -m; } | tee probe-out/machine.txt
+      - name: Install torch 2.9.1+cpu and 2.14.0+cpu
+        if: steps.cpu.outputs.fp16 == 'yes'
+        run: |
+          sudo apt-get install -y -q gdb > /dev/null
+          python -m venv /tmp/v291
+          /tmp/v291/bin/pip install -q torch==2.9.1 --index-url https://download.pytorch.org/whl/cpu
+          /tmp/v291/bin/pip install -q numpy kornia_rs pytest pytest-timeout py-spy
+          /tmp/v291/bin/pip install -q --no-deps -e .
+          python -m venv /tmp/v214
+          /tmp/v214/bin/pip install -q torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
+          /tmp/v214/bin/pip install -q numpy kornia_rs
+          /tmp/v214/bin/pip install -q --no-deps -e .
+          /tmp/v291/bin/pip list 2>/dev/null | grep -iE "^(torch|numpy|kornia)" | tee probe-out/pip-2.9.1.txt
+          /tmp/v214/bin/pip list 2>/dev/null | grep -iE "^(torch|numpy|kornia)" | tee probe-out/pip-2.14.0.txt
+      - name: Probe
+        if: steps.cpu.outputs.fp16 == 'yes'
+        run: python probe/run_probe.py
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.cpu.outputs.fp16 == 'yes'
+        with:
+          name: probe-${{ matrix.slot }}
+          path: probe-out
